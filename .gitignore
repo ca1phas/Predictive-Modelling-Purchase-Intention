@@ -47,3 +47,22 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# =========================================
+# UECM3993 Project-Specific Exclusions
+# =========================================
+
+# Exclude all generated datasets and preprocessing artifacts
+outputs/data/
+
+# Exclude all generated plots and visualizations
+outputs/figures/
+
+# Exclude saved model binaries (reduces repository bloat and prevents Git conflicts)
+outputs/models/
+
+# Exclude renv package library (renv usually creates its own .gitignore inside the folder, 
+# but putting it here acts as a strict fail-safe)
+renv/library/
+renv/python/
+renv/staging/
