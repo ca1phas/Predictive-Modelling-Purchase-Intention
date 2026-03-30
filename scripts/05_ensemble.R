@@ -152,7 +152,7 @@ legend("topright", legend = paste("Stable ntree =", stable_ntree),
 dev.off()
 
 # =========================
-# 3-6. Parameter Tuning (OOB PR-AUC objective)
+# 3-6. Parameter Tuning with Coordinate Descent (OOB PR-AUC objective)
 #   Each step finds the best value and stores it in the sensitivity table
 #   All candidates use balanced sampling (rf_sampsize or final_sz)
 # =========================
@@ -248,7 +248,7 @@ evaluate_rf(rf_model_tune$votes[, "Yes"], y_train_num,
 
 # =========================
 # 8. Default vs Tuned: Test Set Comparison
-#    Confusion matrix for each model + explicit PR-AUC
+#    Confusion matrix for each model + PR-AUC
 # =========================
 cat("8: Comparing default vs tuned model on test set...\n")
 
@@ -331,7 +331,7 @@ dev.off()
 cat("Feature Importance image saved at outputs/figures/ensemble/rf_var_imp.png\n")
 
 # =========================
-# 11. Partial Dependence Plots (top 3 features by MeanDecreaseAccuracy)
+# 11. Partial Dependence Plots 
 # =========================
 cat("11: PDP analysis...\n")
 top_features <- rownames(importance(rf_model))[
@@ -496,7 +496,7 @@ evaluate_xgb(xgb_model_tune, dtrain, y_train_num,
 
 # =========================
 # 5. Default vs Tuned: Test Set Comparison
-#    Confusion matrix for each model + explicit PR-AUC
+#    Confusion matrix for each model + PR-AUC
 # =========================
 cat("5: Comparing default vs tuned XGBoost on test set...\n")
 
@@ -600,7 +600,7 @@ cat("\n--- PART B: Gradient Boosting Completed ---\n")
 
 
 # Save Models for Comparison Phase (06_comparison.R)
-saveRDS(list(rf = rf_model, xgb = xgb_model), "outputs/models/ensemble_models.rds")
+saveRDS(list(rf = rf_model, xgb = xgb_model_tune), "outputs/models/ensemble_models.rds")
 cat("Both ensemble models are saved to outputs/models/ensemble_models.rds for models comparison\n")
 
 cat("\n--- Completed 05_ensemble.R ---\n")
