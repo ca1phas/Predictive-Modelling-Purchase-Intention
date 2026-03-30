@@ -240,6 +240,7 @@ for (col in cols_to_lump) {
 }
 
 cat("-> Successfully combine rare levels in OperatingSystems, Browser, Region, and TrafficType into 'Other'.\n")
+saveRDS(train_data, "outputs/data/train_data_unscaled.rds")
 
 cat("6. One-Hot Encoding\n")
 cat("Handle all nominal categorical predictors.\n")

@@ -64,7 +64,7 @@ dev.off()
 #2.t-SNE
 cat("Running t-SNE...\n")
 set.seed(1)
-tsne_res <- Rtsne(as.matrix(train_features))
+tsne_res <- Rtsne(as.matrix(train_features), check_duplicates = FALSE)
 png("outputs/figures/unsupervised/tsne_plot.png")
 plot(tsne_res$Y,
      col = ifelse(train_revenue == "Yes", "red", "blue"),
@@ -88,6 +88,15 @@ plot(ica_res$S,
 legend("topright", legend=c("Buyer","Non-Buyer"),
        col=c("red","blue"), pch=19)
 dev.off()
+
+cat("\nRunning k-Means on ICA Scores...\n")
+set.seed(42)
+# Using the 2 Independent Components for clustering
+kmeans_ica <- kmeans(ica_res$S, centers = 3, nstart = 25)
+
+cat("\nICA Cluster vs Revenue (Training Set):\n")
+print(table(kmeans_ica$cluster, train_revenue))
+print(prop.table(table(kmeans_ica$cluster, train_revenue), 1))
 
 #k-means
 cat("Running k-Means...\n")
@@ -123,6 +132,45 @@ dev.off()
 cat("\nCluster vs Revenue (Training Set):\n")
 print(table(clusters, train_revenue))
 print(prop.table(table(clusters, train_revenue), 1))
+
+# --- Cluster Profiling (Mean Values) ---
+cat("\nGenerating Cluster Profiling Table...\n")
+
+# 1. Load the pristine, unscaled data Casimir saved for you
+raw_train_data <- readRDS("outputs/data/train_data_unscaled.rds")
+
+# 2. Extract only the original numerical features for the profile
+raw_num_features <- raw_train_data[sapply(raw_train_data, is.numeric)]
+
+# 3. Calculate the true business averages for each cluster
+cluster_profile <- aggregate(raw_num_features, 
+                             by = list(Cluster = clusters), 
+                             FUN = mean)
+
+print(cluster_profile)
+
+# Save for the final report
+write.csv(cluster_profile, "outputs/models/cluster_profile.csv", row.names = FALSE)
+
+cat("\n--- Categorical Cluster Profiling (Most Frequent) ---\n")
+
+# Extract the categorical features from the unscaled data
+raw_cat_features <- raw_train_data[sapply(raw_train_data, is.factor)]
+raw_cat_features$Revenue <- NULL # Remove target variable from profile
+
+# Custom function to find the mode (most frequent category)
+get_mode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+# Aggregate to find the mode for each cluster
+cat_profile <- aggregate(raw_cat_features, 
+                         by = list(Cluster = clusters), 
+                         FUN = get_mode)
+
+print(cat_profile)
+write.csv(cat_profile, "outputs/models/cluster_cat_profile.csv", row.names = FALSE)
 
 #5.Validation on Test Set
 cat("Validating on Test Set...\n")
