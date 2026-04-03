@@ -1,7 +1,7 @@
 # ==============================================================================
 # Script: 01_data_engineering.r
 # Tasks: 
-# 1. Data Acquisition & Initial Cleaning (Remove duplicates, correct types).
+# 1. Data Acquisition & Initial Cleaning (Retain valid duplicates, correct types).
 # 2. Exploratory Data Analysis (Save distributions and boxplots to /figures).
 # 3. Data Splitting (Chronological time-based split).
 # 4. Feature Engineering (Probabilistic imputation, quarter binning, rare level bucketing).
@@ -26,17 +26,8 @@ y <- online_shoppers$data$targets
 df <- cbind(X, y)
 
 cat("2. Understanding the dataset\n")
-cat("Checking for duplicate rows...\n")
-n_duplicates <- sum(duplicated(df))
-cat(sprintf("Found %d duplicate rows.\n", n_duplicates))
 
-# Remove duplicates, since they represent the exact copies of observations and do not add additional information
-if(n_duplicates > 0) {
-  df <- unique(df)
-  cat("-> Successfully removed duplicate rows to reduce bias and overfitting\n")
-}
-
-# Convert categorical attributes to factors
+# Convert categorical attributes to factors FIRST so we can cleanly separate and plot them
 cat_cols = c(
   "Month", 
   "OperatingSystems", 
@@ -55,6 +46,42 @@ df$Month <- factor(df$Month, levels = month_levels)
 # Separate data into numerical and categorical attributes
 num_df = df[sapply(df, is.numeric)]
 cat_df = df[sapply(df, is.factor)]
+
+cat("Checking for duplicate rows...\n")
+n_duplicates <- sum(duplicated(df))
+cat(sprintf("Found %d duplicate rows.\n", n_duplicates))
+
+# ACTION: Retain duplicates and generate visual/tabular proof. 
+if(n_duplicates > 0) {
+  cat("-> Deliberately RETAINING duplicate rows. They represent valid 'instant bounce' sessions and preserve natural probability density.\n")
+  
+  # Isolate duplicates to prove they are natural occurrences
+  dup_df <- df[duplicated(df), ]
+  
+  # 1. Generate a Table for Numerical Columns of Duplicates
+  # This extracts the exact unique values found in the duplicated rows
+  dup_num_summary <- data.frame(
+    Feature = names(num_df),
+    Unique_Values_In_Duplicates = sapply(dup_df[names(num_df)], function(x) paste(unique(x), collapse=", "))
+  )
+  
+  cat("\n--- Proof of Instant Bounces (Numerical Features) ---\n")
+  print(dup_num_summary)
+  write.csv(dup_num_summary, "outputs/data/duplicates_numerical_summary.csv", row.names = FALSE)
+  cat("-> Saved 'duplicates_numerical_summary.csv' to embed as a table in the report.\n\n")
+  
+  # 2. Plot all Categorical Columns for Duplicates (Bar Plots)
+  # Keeping this as a plot since categories (like Month) still have a distribution
+  png("outputs/figures/duplicates_categorical_distributions.png", width=1600, height=800, res=150)
+  par(mfrow=c(2,4), mar=c(6, 4, 3, 1))
+  
+  for (col in names(cat_df)) {
+    barplot(table(dup_df[[col]]), main=paste("Dup. Freq. of", col), col="lightskyblue", las=2)
+  }
+  dev.off()
+  
+  cat("-> Saved 'duplicates_categorical_distributions.png'.\n")
+}
 
 # Numerical Data Summary
 num_summary <- data.frame(
@@ -79,9 +106,9 @@ print(num_summary)
 cat("-- Preliminary Data Summary: Categorical Variables --\n")
 print(cat_summary)
 
-cat("3. Saving Histograms, Box Plots, Bar Plots as PNGs\n")
+cat("3. Saving General Histograms, Box Plots, Bar Plots as PNGs\n")
 
-# Histograms for Numerical Attributes
+# Histograms for Numerical Attributes (Whole Dataset)
 png("outputs/figures/numerical_distributions.png", width=1600, height=800, res=150)
 par(mfrow=c(2,5))
 par(mar=c(6, 4, 3, 1))
@@ -97,7 +124,7 @@ for (col in names(num_df)) {
 }
 dev.off()
 
-# Boxplots of Numerical Attributes
+# Boxplots of Numerical Attributes (Whole Dataset)
 png("outputs/figures/numerical_boxplots.png", width=1600, height=800, res=150)
 par(mfrow=c(2,5))
 par(mar=c(6,4,3,1))
@@ -112,22 +139,110 @@ for (col in names(num_df)) {
 }
 dev.off()
 
-
-# Barplots for Categorical Attributes
+# Barplots for Categorical Attributes (Whole Dataset)
 png("outputs/figures/categorical_distributions.png", width=1600, height=800, res=150)
 par(mfrow=c(2,4))
 par(mar=c(6,4,3,1))
+distribution_list <- list()
 
 for (col in names(cat_df)) {
+  # Get percentages
+  pct <- prop.table(table(df[[col]])) * 100
+  pct <- sort(pct, decreasing = TRUE)
+  
+  # Format top 2 and others
+  top1 <- sprintf("%s (%.2f%%)", names(pct)[1], pct[1])
+  top2 <- ifelse(length(pct) > 1, sprintf("%s (%.2f%%)", names(pct)[2], pct[2]), "N/A")
+  other_pct <- ifelse(length(pct) > 2, sum(pct[3:length(pct)]), 0)
+  other_str <- sprintf("%.2f%%", other_pct)
+  
+  distribution_list[[col]] <- data.frame(
+    Feature = col,
+    Unique_Values = length(unique(df[[col]])),
+    Top_Class_1 = top1,
+    Top_Class_2 = top2,
+    Other_Classes = other_str
+  )
+  
   barplot(
     table(cat_df[[col]]),
     main=paste("Freq. of", col),
-    col="lightcoral",
+    col="mediumpurple",
     las=2
   )
 }
 dev.off()
-cat("All plots successfully saved to outputs/figures/\n")
+cat("All general EDA plots successfully saved to outputs/figures/\n")
+
+cat_distribution_df <- do.call(rbind, distribution_list)
+rownames(cat_distribution_df) <- NULL
+print(cat_distribution_df)
+write.csv(cat_distribution_df, "outputs/data/categorical_distributions_summary.csv", row.names = FALSE)
+cat("-> Saved 'categorical_distributions_summary.csv' to outputs/data/\n")
+
+cat("3.5 Bivariate Analysis & Correlation\n")
+
+# 1. Numerical Variables vs Target (Grouped Boxplots)
+png("outputs/figures/bivariate_num_vs_target.png", width=1600, height=800, res=150)
+par(mfrow=c(2,5), mar=c(6, 4, 3, 1))
+
+for (col in names(num_df)) {
+  boxplot(num_df[[col]] ~ df$Revenue,
+          main=paste(col, "by Revenue"),
+          xlab="Revenue", ylab=col, 
+          col=c("lightcoral", "lightgreen"))
+}
+dev.off()
+
+# 2. Categorical Variables vs Target (Conversion Rate Bar Plots)
+png("outputs/figures/bivariate_cat_vs_target.png", width=1600, height=800, res=150)
+par(mfrow=c(2,4), mar=c(6,4,3,1))
+
+for (col in names(cat_df)) {
+  if(col != "Revenue") {
+    # Calculate conversion rate (% of Revenue = TRUE) for each class
+    counts <- table(cat_df[[col]], df$Revenue)
+    
+    # margin = 1 calculates proportions across the rows. Extract the "TRUE" column.
+    conversion_rates <- prop.table(counts, margin = 1)[, "TRUE"] * 100
+    
+    # Handle NaN for empty factor levels to prevent plot errors
+    conversion_rates[is.na(conversion_rates)] <- 0
+    
+    # Draw the barplot
+    bp <- barplot(conversion_rates, 
+                  main=paste("% Revenue=TRUE by", col),
+                  ylab="Conversion Rate (%)",
+                  col="lightskyblue", las=2, 
+                  ylim=c(0, max(conversion_rates) * 1.2)) # Add headroom for text labels
+    
+    # Add exact percentage text on top of the bars
+    text(x = bp, y = conversion_rates, 
+         label = paste0(round(conversion_rates, 0), "%"), 
+         pos = 3, cex = 0.9, col = "black")
+  }
+}
+dev.off()
+
+# 3. Correlation Matrix for Multicollinearity Check
+cor_matrix <- cor(num_df)
+high_correlations <- which(abs(cor_matrix) > 0.4 & cor_matrix != 1, arr.ind = TRUE)
+
+cat("Checking for highly correlated numerical pairs (|r| > 0.4):\n")
+if(nrow(high_correlations) > 0) {
+  # Extract unique pairs to prevent duplicates (e.g., A-B and B-A)
+  high_cor_pairs <- data.frame(
+    Var1 = rownames(cor_matrix)[high_correlations[, 1]],
+    Var2 = colnames(cor_matrix)[high_correlations[, 2]],
+    Correlation = cor_matrix[high_correlations]
+  )
+  high_cor_pairs <- high_cor_pairs[!duplicated(t(apply(high_cor_pairs[,1:2], 1, sort))), ]
+  print(high_cor_pairs)
+} else {
+  cat("No highly correlated pairs found.\n")
+}
+
+cat("Bivariate plots successfully saved to outputs/figures/\n\n")
 
 cat("4. Data Splitting\n")
 cat("Solution: Chronological Time-Based Split (Train = Jan-Oct, Test = Nov-Dec)\n")
@@ -240,7 +355,6 @@ for (col in cols_to_lump) {
 }
 
 cat("-> Successfully combine rare levels in OperatingSystems, Browser, Region, and TrafficType into 'Other'.\n")
-saveRDS(train_data, "outputs/data/train_data_unscaled.rds")
 
 cat("6. One-Hot Encoding\n")
 cat("Handle all nominal categorical predictors.\n")
@@ -312,11 +426,6 @@ test_data[num_cols] <- as.data.frame(scale(test_data[num_cols], center = train_m
 cat("-> Successfully applied Standardization.\n")
 
 # 8.3 Formatting Target Variable for caret
-# The values TRUE/FALSE are R's reserved logical keywords
-# Using them as factor levels causes R unable to distinguish the boolean value TRUE and a factor level named TRUE
-# Some of caret's calculation may cause require the target factor levels to be valid R variable names.
-# Need to map TRUE/FALSE in Revenue to "Yes"/"No"
-
 # Convert TRUE/FALSE to YES/NO to prevent caret's compilation errors
 train_data$Revenue <- factor(ifelse(train_data$Revenue == TRUE, "Yes", "No"), levels = c("No", "Yes"))
 test_data$Revenue <- factor(ifelse(test_data$Revenue == TRUE, "Yes", "No"), levels = c("No", "Yes"))
