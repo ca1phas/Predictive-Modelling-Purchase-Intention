@@ -136,7 +136,7 @@ print(prop.table(table(clusters, train_revenue), 1))
 # --- Cluster Profiling (Mean Values) ---
 cat("\nGenerating Cluster Profiling Table...\n")
 
-# 1. Load the pristine, unscaled data Casimir saved for you
+# 1. Load the unscaled data
 raw_train_data <- readRDS("outputs/data/train_data_unscaled.rds")
 
 # 2. Extract only the original numerical features for the profile

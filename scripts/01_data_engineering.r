@@ -19,7 +19,7 @@ library(caret)
 if(!dir.exists("outputs/figures")) dir.create("outputs/figures", recursive = TRUE)
 if(!dir.exists("outputs/data")) dir.create("outputs/data", recursive = TRUE)
 
-cat("1. Fetching e-Commerce dataset (ID: 468) from UCI ML Repository...\n")
+cat("1. Fetching e-Commerce dataset (ID: 468) from UCI ML Repository...\n\n")
 online_shoppers <- fetch_ucirepo(id = 468)
 X <- online_shoppers$data$features
 y <- online_shoppers$data$targets
@@ -100,13 +100,13 @@ cat_summary <- data.frame(
   Top_Category = sapply(cat_df, function(x) names(sort(table(x), decreasing=TRUE))[1])
 )
 
-cat("-- Preliminary Data Summary: Numerical Variables --\n")
+cat("\n-- Preliminary Data Summary: Numerical Variables --\n")
 print(num_summary)
 
-cat("-- Preliminary Data Summary: Categorical Variables --\n")
+cat("\n-- Preliminary Data Summary: Categorical Variables --\n")
 print(cat_summary)
 
-cat("3. Saving General Histograms, Box Plots, Bar Plots as PNGs\n")
+cat("\n3. Saving General Histograms, Box Plots, Bar Plots as PNGs\n")
 
 # Histograms for Numerical Attributes (Whole Dataset)
 png("outputs/figures/numerical_distributions.png", width=1600, height=800, res=150)
@@ -172,13 +172,13 @@ for (col in names(cat_df)) {
   )
 }
 dev.off()
-cat("All general EDA plots successfully saved to outputs/figures/\n")
+cat("-> All general EDA plots successfully saved to outputs/figures/\n\n")
 
 cat_distribution_df <- do.call(rbind, distribution_list)
 rownames(cat_distribution_df) <- NULL
 print(cat_distribution_df)
 write.csv(cat_distribution_df, "outputs/data/categorical_distributions_summary.csv", row.names = FALSE)
-cat("-> Saved 'categorical_distributions_summary.csv' to outputs/data/\n")
+cat("-> Saved 'categorical_distributions_summary.csv' to outputs/data/\n\n")
 
 cat("3.5 Bivariate Analysis & Correlation\n")
 
@@ -242,7 +242,7 @@ if(nrow(high_correlations) > 0) {
   cat("No highly correlated pairs found.\n")
 }
 
-cat("Bivariate plots successfully saved to outputs/figures/\n\n")
+cat("-> Bivariate plots successfully saved to outputs/figures/\n\n")
 
 cat("4. Data Splitting\n")
 cat("Solution: Chronological Time-Based Split (Train = Jan-Oct, Test = Nov-Dec)\n")
@@ -250,7 +250,7 @@ cat("Why?\n
     1. Lecture guidelines: chronological split (t < tc) for time-dependent data.\n
     2. Test size is ~38%, similar to the recommended 30% threshold and 10-50% range recommended in the lecture notes.\n
     3. Reduce overfitting risk by evaluating models based on their ability 
-    to  predict holiday-season (year-end) purchasing patterns based on regular-season (non-year-end) data\n")
+    to  predict holiday-season (year-end) purchasing patterns based on regular-season (non-year-end) data\n\n")
 
 # Split into Jan to oct & (Nov, Dec)
 test_months <- c("Nov", "Dec")
@@ -258,10 +258,10 @@ train_data <- df[!df$Month %in% test_months, ]
 test_data  <- df[df$Month %in% test_months, ]
 
 cat(sprintf("-> Train Data: %d rows (%.1f%%)\n", nrow(train_data), (nrow(train_data)/nrow(df))*100))
-cat(sprintf("-> Test Data: %d rows (%.1f%%)\n", nrow(test_data), (nrow(test_data)/nrow(df))*100))
+cat(sprintf("-> Test Data: %d rows (%.1f%%)\n\n", nrow(test_data), (nrow(test_data)/nrow(df))*100))
 
 cat("5. Data Cleaning & Feature Engineering\n")
-cat("Based on the data summary, there is no empty columns.\n")
+cat("Based on the data summary, there is no empty columns.\n\n")
 
 cat("Handle 'Other' Category for VisitorType when the uciml states that VisitorType is either returning or new visitor.\n")
 
@@ -269,7 +269,7 @@ cat("Solution: Probabilistic Imputation\n")
 cat("Why?\n
     1. No Data Loss.\n
     2. Suitable for all models.\n
-    3. Works for new incoming data with 'Other' category.\n")
+    3. Works for new incoming data with 'Other' category.\n\n")
 
 # Calculate the number of Returning and New visitors
 # USe train_data only to prevent data leakage
@@ -294,14 +294,14 @@ train_data$VisitorType <- NULL
 test_data$VisitorType <- NULL
 
 cat("Converted VisitorType to numeric 'isReturningVisitor'.\n")
-cat(sprintf("Assigned 'Other' the probabilistic value of: %.4f\n", prob_returning))
+cat(sprintf("Assigned 'Other' the probabilistic value of: %.4f\n\n", prob_returning))
 
 cat("Handle missing 'Jan' and 'Apr' Month data.\n")
 cat("Solution: Feature Engineering (Quarter Binning)\n")
 cat("Why?\n
     1. Prevents errors in Logistic Regression/LDA.\n
     2. Ensures no data loss.\n
-    3. Makes the model deployment-ready for unseen Jan/Apr data.\n"
+    3. Makes the model deployment-ready for unseen Jan/Apr data.\n\n"
 )
 
 # Map existing and future months into 4 Quarters
@@ -314,20 +314,20 @@ train_data$Quarter <- as.factor(train_data$Quarter)
 # Test_data only contains December, so it's guaranteed to be Q4
 # The factor levels are matched to the training set to prevent pipeline bugs
 test_data$Quarter <- factor(rep("Q4", nrow(test_data)), levels = levels(train_data$Quarter))
-cat("-> Successfully grouped Months into Quarters (Q1, Q2, Q3, Q4).\n")
+cat("-> Successfully grouped Months into Quarters (Q1, Q2, Q3, Q4).\n\n")
 
 # Drop the 'Month' column so it doesn't break models during training
 train_data$Month <- NULL
 test_data$Month <- NULL
 
-cat("All other categorical columns have at least one sample for each category.\n")
+cat("All other categorical columns have at least one sample for each category.\n\n")
 
 cat("Handle categorical levels with extremely low frequencies.\n")
 cat("Solution: Combine these rare levels into an 'Other' bucket.\n")
 cat("Why?\n
     1. Prevents generating dozens of Near-Zero Variance columns during One-Hot Encoding.\n
     2. Prevents singular matrix error in LDA  and Logistic Regression.\n
-    3. Retains the data rather than blindly deleting the columns.\n")
+    3. Retains the data rather than blindly deleting the columns.\n\n")
 
 cols_to_lump <- c("OperatingSystems", "Browser", "Region", "TrafficType")
 threshold <- 0.05 # 5% threshold
@@ -354,14 +354,14 @@ for (col in cols_to_lump) {
   test_data[[col]] <- factor(test_levels, levels = levels(train_data[[col]]))
 }
 
-cat("-> Successfully combine rare levels in OperatingSystems, Browser, Region, and TrafficType into 'Other'.\n")
+cat("-> Successfully combine rare levels in OperatingSystems, Browser, Region, and TrafficType into 'Other'.\n\n")
 
 cat("6. One-Hot Encoding\n")
 cat("Handle all nominal categorical predictors.\n")
 cat("Solution: One-Hot Encoding using caret::dummyVars with fullRank=TRUE.\n")
 cat("Why?\n
     1. Prevents models from misinterpreting nominal categories as mathematical ranks.\n
-    2. fullRank=TRUE avoids the dummy variable trap (perfect multicollinearity).\n")
+    2. fullRank=TRUE avoids the dummy variable trap (perfect multicollinearity).\n\n")
 
 oneh_model <- dummyVars( ~ OperatingSystems + Browser + Region + 
                            TrafficType + Weekend + Quarter, data=train_data, fullRank=TRUE)
@@ -375,7 +375,7 @@ test_data <- cbind(test_data, as.data.frame(test_ohe))
 cols_to_remove <- c("OperatingSystems", "Browser", "Region", "TrafficType", "Weekend", "Quarter")
 train_data[cols_to_remove] <- list(NULL)
 test_data[cols_to_remove] <- list(NULL)
-cat("-> Successfully applied One-Hot Encoding to OperatingSystems, Browser, Region, TrafficType, Weekend, and Quarter.\n")
+cat("-> Successfully applied One-Hot Encoding to OperatingSystems, Browser, Region, TrafficType, Weekend, and Quarter.\n\n")
 
 cat("7. Handling class imbalance\n")
 
@@ -390,12 +390,12 @@ cat("it's best to fix imbalance as close to the source as possible within each m
 cat("Logistic Regression & Decision Tree -> use weights + threshold tuning\n")
 cat("Weighted kNN -> SMOTE (inside CV Loop to prevent data leakage)\n\n")
 
-cat("Generative Models (Naive Bayes, LDA) -> priors = c(0.5, 0.5) + threshold tuning\n")
+cat("Generative Models (Naive Bayes, LDA) -> priors = c(0.5, 0.5) + threshold tuning\n\n")
 
 cat("Random Forest -> classwt/sampsize + threshold tuning\n")
 cat("XGBoost -> scale_pos_weight = 5.25+ eval_metric = \"aucpr\"\n")
 cat("LightGBM -> is_unbalance = TRUE + metric = \"averagae_precision\"\n")
-cat("CatBoost -> auto_class_weights = \"Balanced\" + eval_metric = \"PRAUC\"\n")
+cat("CatBoost -> auto_class_weights = \"Balanced\" + eval_metric = \"PRAUC\"\n\n")
 
 cat("8. Feature Transformation & Scaling\n")
 cat("Handle severe positive skewness, magnitude differences and outliers, in numerical features.\n")
@@ -403,8 +403,10 @@ cat("Solution: Log-Plus-One transformation followed by Standard Scaling (Z-score
 cat("Why?\n
   1. log1p() fixes right-skewness while handling the value 0.\n
   2. Normalizing distributions improves the performances of non-tree based models\n
-  3. Easily reversable for interpretability.\n
-")
+  3. Easily reversable for interpretability.\n\n")
+
+cat("-> Saving unscaled training data for unsupervised cluster profiling.\n")
+saveRDS(train_data, "outputs/data/train_data_unscaled.rds")
 
 num_cols = names(num_df)
 
@@ -429,7 +431,7 @@ cat("-> Successfully applied Standardization.\n")
 # Convert TRUE/FALSE to YES/NO to prevent caret's compilation errors
 train_data$Revenue <- factor(ifelse(train_data$Revenue == TRUE, "Yes", "No"), levels = c("No", "Yes"))
 test_data$Revenue <- factor(ifelse(test_data$Revenue == TRUE, "Yes", "No"), levels = c("No", "Yes"))
-cat("-> Succesfully formatted Revenue factor levels to be valid R variable names to prevent caret's compilation error.\n")
+cat("-> Succesfully formatted Revenue factor levels to be valid R variable names to prevent caret's compilation error.\n\n")
 
 cat("8.4 Remove Near-Zero Variance (NZV) Predictors\n")
 
@@ -442,9 +444,9 @@ if(length(nzv_feature_names) > 0) {
   print(nzv_feature_names)
   cat("\n*** PIPELINE NOTE FOR MODELERS ***\n")
   cat("-> These features have NOT been removed from the global training set.\n")
-  cat("-> For LogReg/LDA: You might need to manually drop these columns in your individual modeling scripts to prevent perfect separation or singularity errors.\n")
+  cat("-> For LogReg/LDA: You might need to manually drop these columns in your individual modeling scripts to prevent perfect separation or singularity errors.\n\n")
 } else {
-  cat("-> No near-zero variance features detected.\n")
+  cat("-> No near-zero variance features detected.\n\n")
   train_data_parametric <- train_data
   test_data_parametric <- test_data
 }
@@ -454,9 +456,9 @@ cat("9. Saving training and testing datasets\n")
 saveRDS(train_data, "outputs/data/train_data.rds")
 saveRDS(test_data, "outputs/data/test_data.rds")
 
-cat("Successfully saved training and testing datasets as .rds files in outputs/data.\n")
+cat("-> Successfully saved training and testing datasets as .rds files in outputs/data.\n\n")
 
-cat("10. Saving preprocessing artifacts")
+cat("10. Saving preprocessing artifacts\n")
 preprocessing_artifacts <- list(
   prob_returning = prob_returning,
   production_keep_levels = production_keep_levels,

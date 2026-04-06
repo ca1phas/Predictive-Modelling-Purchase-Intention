@@ -27,6 +27,7 @@ source(file.path(scripts_dir, "02_unsupervised.R"))
 
 cat("\n--- Phase 3: Discriminative Models ---\n")
 source(file.path(scripts_dir, "03_discriminative.R"))
+source(file.path(scripts_dir, "03_discriminative_Ridge_Lasso_ElasticNet.R"))
 
 cat("\n--- Phase 4: Generative Models & Feature Selection ---\n")
 source(file.path(scripts_dir, "04_generative.R"))
