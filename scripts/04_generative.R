@@ -125,6 +125,44 @@ nb_cm <- confusionMatrix(nb_pred_class,
 )
 print(nb_cm)
 
+# --- Interpretability: Extract Naive Bayes Conditional Probabilities ---
+cat("\nExtracting Naive Bayes Conditional Means to identify purchase intent drivers...\n")
+
+# Initialize an empty data frame to store the results
+nb_insights <- data.frame(Feature = character(), 
+                          Mean_No = numeric(), 
+                          Mean_Yes = numeric(), 
+                          Ratio_Yes_vs_No = numeric(), 
+                          stringsAsFactors = FALSE)
+
+# Loop through each feature in the Naive Bayes tables
+for (feat_name in names(nb_model$tables)) {
+  feat_stats <- nb_model$tables[[feat_name]]
+  
+  # e1071 stores Mean in [,1] and SD in [,2] for continuous/scaled variables
+  if(ncol(feat_stats) >= 1) {
+    mean_no <- feat_stats["No", 1]
+    mean_yes <- feat_stats["Yes", 1]
+    
+    # Calculate ratio (adding a small epsilon to prevent division by zero)
+    ratio <- mean_yes / (mean_no + 1e-9)
+    
+    nb_insights <- rbind(nb_insights, data.frame(
+      Feature = feat_name,
+      Mean_No = round(mean_no, 4),
+      Mean_Yes = round(mean_yes, 4),
+      Ratio_Yes_vs_No = round(ratio, 4)
+    ))
+  }
+}
+
+# Sort by the highest ratio (strongest indicators for 'Yes')
+nb_insights <- nb_insights[order(-nb_insights$Ratio_Yes_vs_No), ]
+
+cat("\nTop 10 Strongest Indicators for Purchase Intent (Revenue = Yes):\n")
+print(head(nb_insights, 10))
+cat("--------------------------------------------------------------\n")
+
 # PART B: Linear Discriminant Analysis (LDA)
 cat("\n--- PART B: Linear Discriminant Analysis (LDA) ---\n")
 
@@ -262,6 +300,13 @@ fourfoldplot(lda_cm$table,
 dev.off()
 
 cat("All plots saved successfully to outputs/figures/generative/\n")
+
+# --- Explicit Output for Model Comparison Table ---
+cat("\n--- Final Generative Metrics for Comparison Table ---\n")
+# Note: Ensure these variable names match what was defined in your ROC/PR calculations
+cat(sprintf("Naive Bayes - AUC: %.4f | PR-AUC: %.4f\n", as.numeric(auc(nb_roc)), nb_pr$auc.integral))
+cat(sprintf("LDA         - AUC: %.4f | PR-AUC: %.4f\n", as.numeric(auc(lda_roc)), lda_pr$auc.integral))
+cat("-----------------------------------------------------\n")
 
 # Save Models for Comparison Phase
 cat("\nSaving trained Generative models to outputs/models/...\n")
