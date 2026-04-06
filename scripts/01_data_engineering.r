@@ -405,6 +405,9 @@ cat("Why?\n
   2. Normalizing distributions improves the performances of non-tree based models\n
   3. Easily reversable for interpretability.\n\n")
 
+cat("-> Saving unscaled training data for unsupervised cluster profiling.\n")
+saveRDS(train_data, "outputs/data/train_data_unscaled.rds")
+
 num_cols = names(num_df)
 
 # 8.1. Log-Plus-One Transformation (since all numerical mins =- 0)

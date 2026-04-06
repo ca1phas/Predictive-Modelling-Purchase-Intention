@@ -75,16 +75,12 @@ weights <- ifelse(y_train == "Yes",
                   (1 / class_freq["No"])  * (length(y_train) / 2))
 
 cat("\n--- PART A: Regularized Logistic Regression ---\n")
-# Note: Check for perfect separation. If glmnet throws errors, manually drop NZV columns from X_train/X_test here.
-# !!! These are copy from chatgpt. Please check.
-#nzv_cols <- nearZeroVar(X_train)
-#if(length(nzv_cols) > 0) {
-#  X_train <- X_train[, -nzv_cols]
-#  X_test  <- X_test[, -nzv_cols]
-#  cat("Removed NZV features for glmnet.\n")
-#} else {
-#  cat("No NZV features found.\n")
-#}
+nzv_cols <- nearZeroVar(X_train)
+if(length(nzv_cols) > 0) {
+  X_train <- X_train[, -nzv_cols]
+  X_test  <- X_test[, -nzv_cols]
+  cat("Removed NZV features for glmnet.\n")
+}
 
 set.seed(123)
 
@@ -107,6 +103,31 @@ logreg_pred <- factor(logreg_pred, levels = c("No", "Yes"))
 
 logreg_cm <- confusionMatrix(logreg_pred, y_test)
 print(logreg_cm)
+
+# --- Interpretability: Extract and Output Odds Ratios ---
+cat("\nExtracting Odds Ratios to identify strong drivers of purchase intention...\n")
+
+# Extract coefficients at the optimal lambda
+logreg_coefs <- coef(logreg_model, s = "lambda.min")
+
+# Convert to a standard matrix and remove the intercept
+coef_matrix <- as.matrix(logreg_coefs)
+coef_matrix <- coef_matrix[rownames(coef_matrix) != "(Intercept)", , drop=FALSE]
+
+# Calculate Odds Ratios (exp(coefficient))
+# Exclude variables whose coefficient was shrunk to exactly 0 by Elastic Net
+active_coefs <- coef_matrix[coef_matrix[,1] != 0, , drop=FALSE]
+odds_ratios <- exp(active_coefs)
+
+# Combine into a data frame and sort to find the strongest drivers
+or_df <- data.frame(Feature = rownames(odds_ratios), OddsRatio = odds_ratios[,1])
+or_df <- or_df[order(-or_df$OddsRatio), ]
+
+cat("\nTop Positive Drivers (Odds Ratio > 1 increases likelihood):\n")
+print(head(or_df, 10))
+
+cat("\nTop Negative Drivers (Odds Ratio < 1 decreases likelihood):\n")
+print(tail(or_df, 5))
 
 cat("\n--- PART B: Classification Tree (CART) ---\n")
 
