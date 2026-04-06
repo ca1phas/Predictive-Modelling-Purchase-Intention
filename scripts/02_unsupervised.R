@@ -37,6 +37,8 @@ test_revenue <- test_data$Revenue
 #PCA
 cat("Running PCA...\n")
 pca_res <- prcomp(train_features)
+print(pca_res)
+print(summary(pca_res))
 
 #PVE
 pve <- (pca_res$sdev^2) / sum(pca_res$sdev^2)
