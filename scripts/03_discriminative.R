@@ -16,6 +16,7 @@ library(rpart)       # For CART
 library(rpart.plot)  # For tree visualization
 library(pROC)        # For ROC curves and threshold tuning
 library(caret)       # For Confusion Matrix
+library(PRROC)       # For Precision-Recall Curves
 
 # Ensure output directories exist
 if(!dir.exists("outputs/figures/discriminative")) dir.create("outputs/figures/discriminative", recursive = TRUE)
@@ -24,6 +25,10 @@ if(!dir.exists("outputs/models")) dir.create("outputs/models", recursive = TRUE)
 # 2. Load the Pre-processed Data
 train_data <- readRDS("outputs/data/train_data.rds")
 test_data  <- readRDS("outputs/data/test_data.rds")
+
+# Create numeric targets for PRROC evaluation
+y_train_num <- ifelse(train_data$Revenue == "Yes", 1, 0)
+y_test_num  <- ifelse(test_data$Revenue  == "Yes", 1, 0)
 
 cat("\nHandling Multicollinearity for Non-Tree Models...\n")
 
@@ -104,6 +109,14 @@ logreg_pred <- factor(logreg_pred, levels = c("No", "Yes"))
 logreg_cm <- confusionMatrix(logreg_pred, y_test)
 print(logreg_cm)
 
+# --- Interpretability: Compute PR-AUC (Ensemble Style) ---
+pr_logreg <- pr.curve(scores.class0 = logreg_test_probs[y_test_num == 1],
+                      scores.class1 = logreg_test_probs[y_test_num == 0], curve = TRUE)
+
+cat("\n--- PR-AUC (Logistic Regression Test Set) ---\n")
+cat(sprintf("  PR-AUC : %.4f\n", pr_logreg$auc.integral))
+cat("---------------------------------------------\n")
+
 # --- Interpretability: Extract and Output Odds Ratios ---
 cat("\nExtracting Odds Ratios to identify strong drivers of purchase intention...\n")
 
@@ -162,12 +175,31 @@ cart_pred <- factor(cart_pred, levels = c("No", "Yes"))
 cart_cm <- confusionMatrix(cart_pred, y_test)
 print(cart_cm)
 
+# --- Interpretability: Compute PR-AUC ---
+pr_cart <- pr.curve(scores.class0 = cart_test_probs[y_test_num == 1],
+                    scores.class1 = cart_test_probs[y_test_num == 0], curve = TRUE)
+
+cat("\n--- PR-AUC (CART Test Set) ---\n")
+cat(sprintf("  PR-AUC : %.4f\n", pr_cart$auc.integral))
+cat("---------------------------------------------\n")
+
 # Plot ROC curves for both models  and save to outputs/figures/discriminative/
 png("outputs/figures/discriminative/roc_comparison.png", width=1200, height=800)
 plot(roc(y_test, as.numeric(logreg_test_probs)), col="blue", main="ROC Curve Comparison")
 lines(roc(y_test, cart_test_probs), col="red")
 legend("bottomright", legend=c("Logistic", "CART"), col=c("blue", "red"), lwd=2)
 dev.off()
+
+# Plot PR curves for both models and save
+png("outputs/figures/discriminative/pr_comparison.png", width=1200, height=800)
+plot(pr_logreg, color="blue", auc.main=FALSE, main="PR Curve Comparison: Logistic vs CART")
+plot(pr_cart, color="red", auc.main=FALSE, add=TRUE)
+legend("bottomleft",
+       c(paste("Logistic (AUC:", round(pr_logreg$auc.integral, 3), ")"),
+         paste("CART     (AUC:", round(pr_cart$auc.integral, 3), ")")),
+       col=c("blue", "red"), lty=1, lwd=2)
+dev.off()
+cat("PR Curve comparison saved at outputs/figures/discriminative/pr_comparison.png\n")
 
 # 4. Save Models for Comparison Phase
 saveRDS(list(logreg = logreg_model, cart = pruned_cart), "outputs/models/discriminative_models.rds")
