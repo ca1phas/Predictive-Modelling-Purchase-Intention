@@ -558,12 +558,14 @@ ensemble_packet <- list(
       mtry     = if (winner_label == "Default") def_mtry else best_mtry,
       nodesize = if (winner_label == "Default") 1 else best_nodesize, # 1 is RF default for classification
       sampsize = if (winner_label == "Default") rf_sampsize else final_sz
-    )
+    ),
+    test_set = test_data
   ),
   xgb = list(
     model     = xgb_model_tune,
     threshold = best_xgb_threshold,
-    params    = final_params
+    params    = final_params,
+    test_set = dtest
   )
 )
 

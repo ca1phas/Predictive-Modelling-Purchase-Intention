@@ -310,9 +310,19 @@ cat("-----------------------------------------------------\n")
 
 # Save Models for Comparison Phase
 cat("\nSaving trained Generative models to outputs/models/...\n")
-saveRDS(
-  list(nb = nb_model, lda = lda_model),
-  "outputs/models/generative_models.rds"
+gen_packet <- list(
+  nb = list(
+    model = nb_model,
+    threshold = optimal_nb_thresh,
+    test_set = test_data
+  ),
+  lda = list(
+    model = lda_model,
+    threshold = optimal_lda_thresh,
+    test_set = test_data
+  )
 )
+
+saveRDS(gen_packet,"outputs/models/generative_models.rds")
 
 cat("\n--- Completed 04_generative.R ---\n")

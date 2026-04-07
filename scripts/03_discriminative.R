@@ -202,6 +202,18 @@ dev.off()
 cat("PR Curve comparison saved at outputs/figures/discriminative/pr_comparison.png\n")
 
 # 4. Save Models for Comparison Phase
-saveRDS(list(logreg = logreg_model, cart = pruned_cart), "outputs/models/discriminative_models.rds")
+disc_packet <- list(
+  logreg = list(
+    model = logreg_model,
+    threshold = optimal_logreg_thresh,
+    test_set = X_test
+  ),
+  cart = list(
+    model = cart_model,
+    threshold = optimal_cart_thresh,
+    test_set = test_data
+  )
+)
+saveRDS(disc_packet, "outputs/models/discriminative_models.rds")
 
 cat("\n--- Completed 03_discriminative.R ---\n")
