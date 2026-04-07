@@ -374,6 +374,12 @@
       "Maintainer": "Hadley Wickham <hadley@posit.co>",
       "Repository": "CRAN"
     },
+    "SHAPforxgboost": {
+      "Package": "SHAPforxgboost",
+      "Version": "0.2.0",
+      "Source": "Repository",
+      "Repository": "CRAN"
+    },
     "SQUAREM": {
       "Package": "SQUAREM",
       "Version": "2021.1",
