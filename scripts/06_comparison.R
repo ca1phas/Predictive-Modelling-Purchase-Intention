@@ -284,7 +284,7 @@ cat("Generating comparison plots...\n")
 model_colors <- c(
   "LogReg"         = "#E41A1C",
   "Naive Bayes"    = "#FF7F00",
-  "Random Forest"  = "#4DAF4A",
+  "CART"           = "#4DAF4A",
   "LDA"            = "#377EB8",
   "Random Forest"  = "#984EA3",
   "XGBoost"        = "#A65628"
@@ -305,12 +305,11 @@ for (nm in names(pr_curves_list)) {
           col = model_colors[nm], lwd = 2)
   }
 }
-par(xpd = TRUE)
-legend(x = 1.03, y = 1,
+legend(x = "bottomleft", y = 1,
        legend = sapply(names(pr_curves_list), function(nm)
          sprintf("%s (%.3f)", nm, pr_curves_list[[nm]]$auc.integral)),
        col    = model_colors[names(pr_curves_list)],
-       lwd = 2, bty = "n", cex = 0.75)
+       lwd = 2, bty = "n", cex = 1.75)
 dev.off()
 cat("  -> outputs/figures/comparison/pr_curve_comparison.png\n")
 
@@ -324,12 +323,11 @@ for (i in seq_along(roc_curves_list)[-1]) {
   plot(roc_curves_list[[nm]], add = TRUE, col = model_colors[nm], lwd = 2)
 }
 abline(a = 0, b = 1, lty = 2, col = "grey60")
-par(xpd = TRUE)
-legend(x = 1.03, y = 1,
+legend(x = "bottomright", y = 1,
        legend = sapply(names(roc_curves_list), function(nm)
          sprintf("%s (%.3f)", nm, as.numeric(auc(roc_curves_list[[nm]])))),
        col    = model_colors[names(roc_curves_list)],
-       lwd = 2, bty = "n", cex = 0.75)
+       lwd = 2, bty = "n", cex = 1.75)
 dev.off()
 cat("  -> outputs/figures/comparison/roc_curve_comparison.png\n")
 
@@ -352,13 +350,13 @@ plot(NULL, xlim = c(-1.4, 1.4), ylim = c(-1.4, 1.4),
 # Draw grid rings at 0.25, 0.5, 0.75, 1.0
 for (r in c(0.25, 0.5, 0.75, 1.0)) {
   polygon(r * cos(angles), r * sin(angles), border = "grey80", lty = 2)
-  text(0, r + 0.03, sprintf("%.2f", r), cex = 0.55, col = "grey50")
+  text(0, r + 0.03, sprintf("%.2f", r), cex = 1.05, col = "grey50")
 }
 # Axis spokes & labels
 for (i in seq_len(n_axis)) {
   lines(c(0, cos(angles[i])), c(0, sin(angles[i])), col = "grey70")
   text(1.22 * cos(angles[i]), 1.22 * sin(angles[i]),
-       gsub("_", "\n", radar_metrics[i]), cex = 0.7, font = 2)
+       gsub("_", "\n", radar_metrics[i]), cex = 1.1, font = 2)
 }
 # Draw each model polygon
 model_names_radar <- radar_df$Model
@@ -369,11 +367,11 @@ for (nm in model_names_radar) {
   col  <- model_colors[nm]
   lines(x, y, col = col, lwd = 2)
   points(vals * cos(angles), vals * sin(angles),
-         col = col, pch = 19, cex = 0.8)
+         col = col, pch = 19, cex = 1.3)
 }
-legend("bottomright", legend = model_names_radar,
+legend("bottomleft", legend = model_names_radar,
        col = model_colors[model_names_radar],
-       lwd = 2, pch = 19, bty = "n", cex = 0.75)
+       lwd = 2, pch = 19, bty = "n", cex = 1.49)
 dev.off()
 cat("  -> outputs/figures/comparison/radar_chart.png\n")
 
