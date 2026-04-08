@@ -8,7 +8,7 @@
 # 4. Evaluation (Confusion Matrix, PR-AUC, ROC)
 # ==============================================================================
 
-# The entire program takes around 593.78 seconds (9.90 minutes) to execute
+# The entire program takes around 12.69 minutes to execute as there are hyperparameters to tune
 cat("\n--- Running 05_ensemble.R ---\n")
 
 # 1. Load Required Libraries
@@ -119,6 +119,7 @@ rf_sampsize <- c("No" = n_minority, "Yes" = n_minority)  # 1:1 balanced sampling
 def_mtry    <- floor(sqrt(ncol(train_data) - 1)) # exclude response variable
 def_ntree   <- 500
 
+set.seed(42)
 rf_model <- train_rf(ntree = def_ntree, mtry = def_mtry, sampsize = rf_sampsize)
 
 evaluate_rf(rf_model$votes[, "Yes"], y_train_num,
@@ -140,14 +141,6 @@ for (i in seq_along(error_diff)) {
   if (count >= 50) { stable_ntree <- i + 1; break }
 }
 cat(sprintf("Stable ntree: %d\n", stable_ntree))
-
-png("outputs/figures/ensemble/rf_stability_plot.png", 800, 600)
-plot(oob_error, type = "l", lwd = 2, xlab = "Trees", ylab = "OOB Error",
-     main = "RF Tree Stability")
-abline(v = stable_ntree, col = "blue", lty = 2)
-legend("topright", legend = paste("Stable ntree =", stable_ntree),
-       col = "blue", lty = 2, lwd = 1)
-dev.off()
 
 # =========================
 # 3-6. Parameter Tuning with Coordinate Descent (OOB PR-AUC objective)
@@ -238,6 +231,7 @@ print(sensitivity_results)
 # =========================
 cat("\n7: Training tuned model...\n")
 
+set.seed(42)
 rf_model_tune <- train_rf(ntree = stable_ntree, mtry = best_mtry,
                           nodesize = best_nodesize, sampsize = final_sz)
 
@@ -581,7 +575,7 @@ plot(pr_final_xgb, col = "red", auc.main = FALSE, add = TRUE)
 legend("bottomleft",
        c(paste("RF",      winner_label, "(AUC:", round(pr_final$auc.integral,     3), ")"),
          paste("XGBoost Tuned (AUC:",            round(pr_final_xgb$auc.integral, 3), ")")),
-       col = c("blue", "red"), lty = 1, cex = 0.8)
+       col = c("blue", "red"), lty = 1, cex = 1.6)
 dev.off()
 cat("PR-AUC plot saved at outputs/figures/ensemble/final_prcurve_rf_xgb.png\n")
 
