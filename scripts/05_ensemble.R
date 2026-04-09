@@ -8,16 +8,16 @@
 # 4. Evaluation (Confusion Matrix, PR-AUC, ROC)
 # ==============================================================================
 
-# The entire program takes around 593.78 seconds (9.90 minutes) to execute
+# The entire program takes around 12.69 minutes to execute as there are hyperparameters to tune
 cat("\n--- Running 05_ensemble.R ---\n")
 
 # 1. Load Required Libraries
 library(randomForest)           # For Random Forest (or 'ranger' for speed)
 library(xgboost)                # For Extreme Gradient Boosting
-library(pROC)                   # For ROC curves
 library(PRROC)                  # For Precision-Recall Curves (crucial for imbalanced data)
 library(caret)                  # For Evaluation
 library(rBayesianOptimization)  # For Bayesian Optimization
+library(SHAPforxgboost)         # For SHAP Analysis
 
 # Ensure output directories exist
 if(!dir.exists("outputs/figures/ensemble")) dir.create("outputs/figures/ensemble", recursive = TRUE)
@@ -89,7 +89,6 @@ evaluate_xgb <- function(model, dmatrix, actual_labels, threshold = 0.5, label =
 cat("\n--- PART A: Random Forest (Bagging) ---\n")
 
 # Train RF on train_data with optional parameters
-# OOB votes serve as the leak-free evaluation signal — no separate holdout needed
 train_rf <- function(ntree, mtry = NULL, nodesize = NULL, sampsize = NULL) {
   args <- list(formula = Revenue ~ ., data = train_data,
                ntree = ntree, importance = TRUE)
@@ -100,7 +99,6 @@ train_rf <- function(ntree, mtry = NULL, nodesize = NULL, sampsize = NULL) {
 }
 
 # Train RF and return PR-AUC + OOB error from OOB votes (primary tuning objective)
-# OOB = each tree predicts only on observations it was NOT trained on (i.e. leak-free)
 get_oob_prauc <- function(ntree, mtry = NULL, nodesize = NULL, sampsize = NULL) {
   model <- train_rf(ntree, mtry, nodesize, sampsize)
   probs <- model$votes[, "Yes"]
@@ -121,6 +119,7 @@ rf_sampsize <- c("No" = n_minority, "Yes" = n_minority)  # 1:1 balanced sampling
 def_mtry    <- floor(sqrt(ncol(train_data) - 1)) # exclude response variable
 def_ntree   <- 500
 
+set.seed(42)
 rf_model <- train_rf(ntree = def_ntree, mtry = def_mtry, sampsize = rf_sampsize)
 
 evaluate_rf(rf_model$votes[, "Yes"], y_train_num,
@@ -142,14 +141,6 @@ for (i in seq_along(error_diff)) {
   if (count >= 50) { stable_ntree <- i + 1; break }
 }
 cat(sprintf("Stable ntree: %d\n", stable_ntree))
-
-png("outputs/figures/ensemble/rf_stability_plot.png", 800, 600)
-plot(oob_error, type = "l", lwd = 2, xlab = "Trees", ylab = "OOB Error",
-     main = "RF Tree Stability")
-abline(v = stable_ntree, col = "blue", lty = 2)
-legend("topright", legend = paste("Stable ntree =", stable_ntree),
-       col = "blue", lty = 2, lwd = 1)
-dev.off()
 
 # =========================
 # 3-6. Parameter Tuning with Coordinate Descent (OOB PR-AUC objective)
@@ -240,6 +231,7 @@ print(sensitivity_results)
 # =========================
 cat("\n7: Training tuned model...\n")
 
+set.seed(42)
 rf_model_tune <- train_rf(ntree = stable_ntree, mtry = best_mtry,
                           nodesize = best_nodesize, sampsize = final_sz)
 
@@ -274,30 +266,21 @@ cat(sprintf("  Default : %.4f\n", pr_def$auc.integral))
 cat(sprintf("  Tuned   : %.4f\n", pr_tune$auc.integral))
 cat("-----------------------------------------\n")
 
-plot(pr_def,  color = "red",  auc.main = FALSE, main = "PR Curve: Default vs Tuned RF")
-plot(pr_tune, color = "blue", auc.main = FALSE, add = TRUE)
-legend("bottomleft",
-       c(paste("Default (AUC:", round(pr_def$auc.integral,  3), ")"),
-         paste("Tuned   (AUC:", round(pr_tune$auc.integral, 3), ")")),
-       col = c("red", "blue"), lty = 1, cex = 0.8)
-
 # =========================
 # 9. Model Selection + Threshold Optimisation
-#    Threshold: maximise balanced accuracy on OOB votes (leak-free, all quarters)
+#    Threshold: maximise balanced accuracy 
 # =========================
 cat("\n9: Model selection and threshold tuning...\n")
 
-ba_def  <- evaluate_rf(test_probs_def,  y_test_num, verbose = FALSE)["Bal_Acc"]
-ba_tune <- evaluate_rf(test_probs_tune, y_test_num, verbose = FALSE)["Bal_Acc"]
+prauc_def  <- evaluate_rf(test_probs_def,  y_test_num, verbose = FALSE)["PR_AUC"]
+prauc_tune <- evaluate_rf(test_probs_tune, y_test_num, verbose = FALSE)["PR_AUC"]
 
-# note: Default RF is selected as winner since its overall performance is better 
-# even though the pr score is lower by little, use balanced accuracy as the selection score
-if (ba_def >= ba_tune) {
+if (prauc_def >= prauc_tune) {
   winner_model <- rf_model;      winner_label <- "Default"
-  cat("Default RF selected as winner (higher or equal test balanced accuracy)\n")
+  cat("Default RF selected as winner (higher or equal PR-AUC)\n")
 } else {
   winner_model <- rf_model_tune; winner_label <- "Tuned"
-  cat("Tuned RF selected as winner (higher test balanced accuracy)\n")
+  cat("Tuned RF selected as winner (higher test PC-AUC)\n")
 }
 
 winner_oob_probs <- winner_model$votes[, "Yes"]
@@ -312,31 +295,25 @@ bal_accs <- sapply(thresholds, function(t) {
 best_threshold <- thresholds[which.max(bal_accs)]
 cat(sprintf("Optimal threshold (max balanced accuracy on OOB votes): %.2f\n", best_threshold))
 
-png("outputs/figures/ensemble/rf_threshold_curve.png", 800, 600)
-plot(thresholds, bal_accs, type = "l", lwd = 2,
-     xlab = "Threshold", ylab = "Balanced Accuracy (OOB votes)",
-     main = paste("RF Threshold Optimisation —", winner_label, "model"))
-abline(v = best_threshold, col = "blue", lty = 2)
-legend("topright", legend = paste("Optimal threshold =", best_threshold),
-       col = "blue", lty = 2, lwd = 1)
-dev.off()
-
 # =========================
-# 10. Feature Importance
+# 10. Feature Importance 
 # =========================
 cat("10: Feature importance...\n")
 png("outputs/figures/ensemble/rf_var_imp.png", 800, 600)
-varImpPlot(rf_model, main = "Feature Importance: Purchase Intention")
+varImpPlot(rf_model, n.var = 10, type = 1,
+           main = "Top 10 Feature Importance: Purchase Intention")
 dev.off()
 cat("Feature Importance image saved at outputs/figures/ensemble/rf_var_imp.png\n")
 
 # =========================
-# 11. Partial Dependence Plots 
+# 11. Partial Dependence Plots
+#     Top 3 features ranked by MDA 
 # =========================
 cat("11: PDP analysis...\n")
-top_features <- rownames(importance(rf_model))[
-  order(importance(rf_model)[, 4], decreasing = TRUE)[1:3]]
+mda_scores   <- importance(rf_model)[, "MeanDecreaseAccuracy"]   # MDA column
+top_features <- names(sort(mda_scores, decreasing = TRUE))[1:3]
 
+# PDP for Top 3 Features
 png("outputs/figures/ensemble/rf_pdp_plots.png", 1000, 500)
 par(mfrow = c(1, 3))
 for (i in 1:length(top_features))
@@ -347,7 +324,7 @@ cat("PDP image saved at outputs/figures/ensemble/rf_pdp_plots.png\n")
 
 # =========================
 # 12. Final Evaluation (optimal threshold)
-#     Confusion matrix + explicit PR-AUC
+#     Confusion matrix + PR-AUC
 # =========================
 cat("\n12: Final test set evaluation...\n")
 
@@ -357,7 +334,8 @@ final_preds  <- factor(ifelse(winner_probs > best_threshold, "Yes", "No"),
 
 cat(sprintf("\nFinal RF — confusion matrix (%s model, threshold = %.2f):\n",
             winner_label, best_threshold))
-print(confusionMatrix(final_preds, test_data$Revenue, positive = "Yes"))
+cm <- confusionMatrix(final_preds, test_data$Revenue, positive = "Yes")
+print(cm)
 
 pr_final <- pr.curve(scores.class0 = winner_probs[y_test_num == 1],
                      scores.class1 = winner_probs[y_test_num == 0], curve = TRUE)
@@ -365,26 +343,6 @@ pr_final <- pr.curve(scores.class0 = winner_probs[y_test_num == 1],
 cat("\n--- PR-AUC (test set, optimal threshold) ---\n")
 cat(sprintf("  %s model : %.4f\n", winner_label, pr_final$auc.integral))
 cat("---------------------------------------------\n")
-
-plot(pr_final, col = "blue", auc.main = FALSE,
-     main = paste("Final RF PR Curve —", winner_label,
-                  "(AUC:", round(pr_final$auc.integral, 3), ")"))
-
-# =========================
-# 13. Save Final RF Packet
-# =========================
-cat("13: Saving final RF packet...\n")
-saveRDS(list(
-  model           = winner_model,
-  predicted_probs = winner_probs,
-  threshold       = best_threshold,
-  best_params     = list(
-    ntree    = if (winner_label == "Default") def_ntree   else stable_ntree,
-    mtry     = if (winner_label == "Default") def_mtry    else best_mtry,
-    nodesize = if (winner_label == "Default") NULL        else best_nodesize,
-    sampsize = if (winner_label == "Default") rf_sampsize else final_sz
-  )
-), "outputs/models/rf_final_packet.rds")
 
 cat("\n--- PART A: Random Forest Completed ---\n")
 
@@ -522,14 +480,6 @@ cat(sprintf("  Default : %.4f\n", pr_base$auc.integral))
 cat(sprintf("  Tuned   : %.4f\n", pr_tune_curve$auc.integral))
 cat("-----------------------------------------\n")
 
-plot(pr_tune_curve, color = "blue", auc.main = FALSE,
-     main = "PR Curve: Default vs Tuned XGBoost")
-plot(pr_base, add = TRUE, color = "red", auc.main = FALSE)
-legend("bottomleft",
-       c(paste("Tuned   (AUC:", round(pr_tune_curve$auc.integral, 3), ")"),
-         paste("Default (AUC:", round(pr_base$auc.integral,        3), ")")),
-       col = c("blue", "red"), lty = 1, cex = 0.8)
-
 cat("Tuned model is chosen as winner...\n")
 
 # =========================
@@ -552,18 +502,25 @@ best_xgb_threshold <- thresholds[which.max(bal_accs)]
 cat(sprintf("Optimal threshold: %.2f\n", best_xgb_threshold))
 
 # =========================
-# 7. Feature Importance
+# 7. SHAP Analysis
 # =========================
-cat("7: Generating feature importance plot...\n")
-imp_matrix <- xgb.importance(model = xgb_model_tune)
-png("outputs/figures/ensemble/xgb_importance.png", 800, 600)
-xgb.plot.importance(imp_matrix[1:10, ], main = "XGBoost Top 10 Features (Gain)")
+cat("7: Running SHAP analysis for XGBoost...\n")
+
+png("outputs/figures/ensemble/xgb_shap_summary.png", 800, 600)
+shap.plot.summary.wrap1(
+  model = xgb_model_tune, 
+  X = X_train_mat,  
+  top_n = 10,
+  dilute = FALSE  
+) + 
+  ggtitle("SHAP Summary: Impact on Purchase Intention (Top 10 Features)")
 dev.off()
-cat("Feature Importance image saved at outputs/figures/ensemble/xgb_importance.png\n")
+
+cat("SHAP Summary plot saved at outputs/figures/ensemble/xgb_shap_summary.png\n")
 
 # =========================
 # 8. Final Evaluation (optimal threshold)
-#    Confusion matrix + explicit PR-AUC
+#    Confusion matrix + PR-AUC
 # =========================
 cat("8: Final test set evaluation...\n")
 
@@ -581,26 +538,45 @@ cat("\n--- PR-AUC (test set, optimal threshold) ---\n")
 cat(sprintf("  Tuned model : %.4f\n", pr_final_xgb$auc.integral))
 cat("---------------------------------------------\n")
 
-plot(pr_final_xgb, col = "blue", auc.main = FALSE,
-     main = paste("Final XGBoost PR Curve (AUC:",
-                  round(pr_final_xgb$auc.integral, 3), ")"))
-
-# =========================
-# 9. Save Final XGBoost Packet
-# =========================
-cat("9: Saving final XGBoost packet...\n")
-saveRDS(list(
-  model           = xgb_model_tune,
-  predicted_probs = probs_tune,
-  threshold       = best_xgb_threshold,
-  params          = final_params
-), "outputs/models/xgb_final_packet.rds")
-
 cat("\n--- PART B: Gradient Boosting Completed ---\n")
 
 
 # Save Models for Comparison Phase (06_comparison.R)
-saveRDS(list(rf = rf_model, xgb = xgb_model_tune), "outputs/models/ensemble_models.rds")
-cat("Both ensemble models are saved to outputs/models/ensemble_models.rds for models comparison\n")
+cat("\n--- Saving final model packets for comparison --- \n")
+ensemble_packet <- list(
+  rf = list(
+    model     = winner_model,     
+    threshold = best_threshold,
+    params    = list(
+      ntree    = if (winner_label == "Default") def_ntree else stable_ntree,
+      mtry     = if (winner_label == "Default") def_mtry else best_mtry,
+      nodesize = if (winner_label == "Default") 1 else best_nodesize, # 1 is RF default for classification
+      sampsize = if (winner_label == "Default") rf_sampsize else final_sz
+    ),
+    test_set = test_data
+  ),
+  xgb = list(
+    model     = xgb_model_tune,
+    threshold = best_xgb_threshold,
+    params    = final_params,
+    test_set = dtest
+  )
+)
+
+saveRDS(ensemble_packet, "outputs/models/ensemble_models.rds")
+cat("File saved to outputs/models/ensemble_models.rds\n")
+
+# PR-AUC plot for selected ensemble models
+cat("\n---PR-AUC plot---\n")
+png("outputs/figures/ensemble/final_prcurve_rf_xgb.png", 800, 600)
+plot(pr_final, col = "blue", auc.main = FALSE,
+     main = "Final PR Curves: RF vs XGBoost")
+plot(pr_final_xgb, col = "red", auc.main = FALSE, add = TRUE)
+legend("bottomleft",
+       c(paste("RF",      winner_label, "(AUC:", round(pr_final$auc.integral,     3), ")"),
+         paste("XGBoost Tuned (AUC:",            round(pr_final_xgb$auc.integral, 3), ")")),
+       col = c("blue", "red"), lty = 1, cex = 1.6)
+dev.off()
+cat("PR-AUC plot saved at outputs/figures/ensemble/final_prcurve_rf_xgb.png\n")
 
 cat("\n--- Completed 05_ensemble.R ---\n")
