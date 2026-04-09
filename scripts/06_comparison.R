@@ -1,6 +1,6 @@
 # ==============================================================================
 # Script: 06_comparison.R
-# Author: Casimir Chiong Ming Yuan (2401315)
+# Author: Kok Shau Loon (2401978)
 # Tasks: 
 # 1. Load the preserved test_data.rds
 # 2. Load all saved supervised models from outputs/models/
