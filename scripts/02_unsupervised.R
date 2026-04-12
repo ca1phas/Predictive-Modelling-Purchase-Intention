@@ -67,6 +67,8 @@ dev.off()
 cat("Running t-SNE...\n")
 set.seed(1)
 tsne_res <- Rtsne(as.matrix(train_features), check_duplicates = FALSE)
+print(tsne_res)
+print(summary(tsne_res))
 png("outputs/figures/unsupervised/tsne_plot.png")
 plot(tsne_res$Y,
      col = ifelse(train_revenue == "Yes", "red", "blue"),
@@ -80,6 +82,8 @@ dev.off()
 
 #3.ICA
 ica_res <- fastICA(train_features, n.comp = 2)
+print(ica_res)
+print(summary(ica_res))
 png("outputs/figures/unsupervised/ica_plot.png")
 plot(ica_res$S,
      col = ifelse(train_revenue == "Yes", "red", "blue"),
@@ -144,6 +148,10 @@ raw_train_data <- readRDS("outputs/data/train_data_unscaled.rds")
 # 2. Extract only the original numerical features for the profile
 raw_num_features <- raw_train_data[sapply(raw_train_data, is.numeric)]
 
+# Add Revenue as a numeric binary (1 for Yes, 0 for No) to calculate Conversion Rate
+# This will show the percentage of buyers in each cluster
+raw_num_features$Revenue_Rate <- as.numeric(raw_train_data$Revenue == TRUE)
+
 # 3. Calculate the true business averages for each cluster
 cluster_profile <- aggregate(raw_num_features, 
                              by = list(Cluster = clusters), 
@@ -153,26 +161,6 @@ print(cluster_profile)
 
 # Save for the final report
 write.csv(cluster_profile, "outputs/models/cluster_profile.csv", row.names = FALSE)
-
-cat("\n--- Categorical Cluster Profiling (Most Frequent) ---\n")
-
-# Extract the categorical features from the unscaled data
-raw_cat_features <- raw_train_data[sapply(raw_train_data, is.factor)]
-raw_cat_features$Revenue <- NULL # Remove target variable from profile
-
-# Custom function to find the mode (most frequent category)
-get_mode <- function(v) {
-  uniqv <- unique(v)
-  uniqv[which.max(tabulate(match(v, uniqv)))]
-}
-
-# Aggregate to find the mode for each cluster
-cat_profile <- aggregate(raw_cat_features, 
-                         by = list(Cluster = clusters), 
-                         FUN = get_mode)
-
-print(cat_profile)
-write.csv(cat_profile, "outputs/models/cluster_cat_profile.csv", row.names = FALSE)
 
 #5.Validation on Test Set
 cat("Validating on Test Set...\n")
