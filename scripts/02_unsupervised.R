@@ -160,7 +160,7 @@ cluster_profile <- aggregate(raw_num_features,
 print(cluster_profile)
 
 # Save for the final report
-write.csv(cluster_profile, "outputs/models/cluster_profile.csv", row.names = FALSE)
+write.csv(cluster_profile, "outputs/tables/cluster_profile.csv", row.names = FALSE)
 
 #5.Validation on Test Set
 cat("Validating on Test Set...\n")
