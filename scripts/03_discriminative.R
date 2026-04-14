@@ -106,7 +106,7 @@ logreg_test_probs <- predict(logreg_model, newx = X_test, type = "response", s =
 logreg_pred <- ifelse(logreg_test_probs > optimal_logreg_thresh, "Yes", "No")
 logreg_pred <- factor(logreg_pred, levels = c("No", "Yes"))
 
-logreg_cm <- confusionMatrix(logreg_pred, y_test)
+logreg_cm <- confusionMatrix(logreg_pred, y_test, positive = "Yes")
 print(logreg_cm)
 
 # --- Interpretability: Compute PR-AUC (Ensemble Style) ---
@@ -172,7 +172,7 @@ cart_test_probs <- predict(pruned_cart, test_data, type = "prob")[,2]
 cart_pred <- ifelse(cart_test_probs > optimal_cart_thresh, "Yes", "No")
 cart_pred <- factor(cart_pred, levels = c("No", "Yes"))
 
-cart_cm <- confusionMatrix(cart_pred, y_test)
+cart_cm <- confusionMatrix(cart_pred, y_test, positive = "Yes")
 print(cart_cm)
 
 # --- Interpretability: Compute PR-AUC ---
@@ -209,7 +209,7 @@ disc_packet <- list(
     test_set = X_test
   ),
   cart = list(
-    model = cart_model,
+    model = pruned_cart,
     threshold = optimal_cart_thresh,
     test_set = test_data
   )
