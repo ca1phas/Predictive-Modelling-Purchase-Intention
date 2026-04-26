@@ -1,3 +1,5 @@
+Canva slides: https://www.canva.com/design/DAHHWFOv67w/Soj5CaXufHQwCWAk0VXaTA/edit
+
 # Predictive-Modelling-Purchase-Intention
 
 This repository contains the R project for our UECM3993 Predictive Modelling group assignment. We are analyzing the **e-Commerce with the Online Shoppers Purchasing Intention Dataset (ID: 468)**. The data is fetched directly via `ucimlrepo` to ensure the code works on the original dataset as per the assignment requirements.
